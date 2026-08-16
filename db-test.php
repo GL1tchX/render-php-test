@@ -1,22 +1,24 @@
 <?php
 
-header('Content-Type: application/json; charset=utf-8');
+header('Content-Type: application/json');
 
 $host = getenv('DB_HOST');
 $port = getenv('DB_PORT');
-$name = getenv('DB_NAME');
+$db   = getenv('DB_NAME');
 $user = getenv('DB_USER');
-$pass = getenv('DB_PASSWORD');
+$pass = getenv('DB_PASS');
 
-$caFile = '/etc/secrets/aiven-ca.pem';
+$ca = '/etc/secrets/aiven-ca.pem';
 
 try {
-    $dsn = sprintf(
-        'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
-        $host,
-        $port,
-        $name
-    );
+
+    $dsn = "mysql:"
+         . "host={$host};"
+         . "port={$port};"
+         . "dbname={$db};"
+         . "charset=utf8mb4;"
+         . "sslmode=verify-ca;"
+         . "sslrootcert={$ca}";
 
     $pdo = new PDO(
         $dsn,
@@ -25,50 +27,31 @@ try {
         [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::MYSQL_ATTR_SSL_CA => $caFile,
-            PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => true,
         ]
     );
 
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS render_persistence_test (
-            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-            test_value VARCHAR(100) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ");
-
-    $value = 'render-' . bin2hex(random_bytes(4));
-
-    $insert = $pdo->prepare("
-        INSERT INTO render_persistence_test (test_value)
-        VALUES (?)
-    ");
-
-    $insert->execute([$value]);
-
-    $rows = $pdo->query("
-        SELECT id, test_value, created_at
-        FROM render_persistence_test
-        ORDER BY id DESC
-        LIMIT 5
-    ")->fetchAll();
+    $result = $pdo->query("
+        SELECT
+            VERSION() AS mysql_version,
+            DATABASE() AS database_name,
+            USER() AS database_user
+    ")->fetch();
 
     echo json_encode([
         'ok' => true,
         'test' => 'render_aiven_mysql',
-        'ssl_ca_exists' => file_exists($caFile),
-        'inserted_value' => $value,
-        'recent_rows' => $rows,
+        'ssl_ca_exists' => file_exists($ca),
+        'result' => $result
     ], JSON_PRETTY_PRINT);
 
 } catch (Throwable $e) {
+
     http_response_code(500);
 
     echo json_encode([
         'ok' => false,
         'test' => 'render_aiven_mysql',
         'error' => $e->getMessage(),
-        'ssl_ca_exists' => file_exists($caFile),
+        'ssl_ca_exists' => file_exists($ca)
     ], JSON_PRETTY_PRINT);
 }
