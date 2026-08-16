@@ -1,0 +1,3 @@
+RewriteEngine On
+
+RewriteRule ^api/mobile/v1/health/?$ api/mobile/v1/health.php [L,QSA]
